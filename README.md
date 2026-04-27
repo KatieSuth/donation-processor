@@ -1,8 +1,3 @@
-### Project Status
-[![Backend](https://github.com/KatieSuth/donation-processor/actions/workflows/backend.yml/badge.svg)](https://github.com/KatieSuth/donation-processor/actions)
-[![Backend Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/KatieSuth/3a4113f9325b9a4a8215ff2fcd018fbf/raw/donation-processor-coverage.json)](https://github.com/KatieSuth/donation-processor/actions)
-[![Frontend](https://github.com/KatieSuth/donation-processor/actions/workflows/frontend.yml/badge.svg)](https://github.com/KatieSuth/donation-processor/actions)
-
 # Donation Processor
 
 Minimal full-stack donation processor with:
