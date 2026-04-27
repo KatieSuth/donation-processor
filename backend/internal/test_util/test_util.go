@@ -1,0 +1,130 @@
+// Package test_util supports integration tests: test DB pool, one-shot migrations, Gin
+// test contexts, and shared secrets for handler tests.
+package test_util
+
+import (
+	"context"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"log"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
+	"sync"
+	"testing"
+
+	"github.com/KatieSuth/donation-processor/backend/internal/db"
+	"github.com/KatieSuth/donation-processor/backend/internal/store"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/joho/godotenv"
+	"github.com/pressly/goose/v3"
+	"github.com/stretchr/testify/require"
+)
+
+var migrationOnce sync.Once
+
+func runMigrations(pool *pgxpool.Pool) {
+	migrationOnce.Do(func() {
+		sqlDB := stdlib.OpenDBFromPool(pool)
+		// Don't defer sqlDB.Close() here because it would close the underlying pool that the tests need.
+
+		if err := goose.SetDialect("postgres"); err != nil {
+			log.Fatalf("goose dialect: %v", err)
+		}
+
+		_, filename, _, _ := runtime.Caller(0)
+		if err := goose.Up(sqlDB, filepath.Join(filepath.Dir(filename), "../../sql/migrations")); err != nil {
+			log.Fatalf("migrations up: %v", err)
+		}
+	})
+}
+
+func LoadEnv(t *testing.T) {
+	t.Helper()
+	_, filename, _, _ := runtime.Caller(0)
+	dir := filepath.Join(filepath.Dir(filename), "../..") // goes to backend/
+	_ = godotenv.Load(filepath.Join(dir, ".env"))
+}
+
+// GetTestPool initializes the environment, runs migrations, and returns a live pool.
+// The caller is responsible for calling pool.Close().
+func GetTestPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	LoadEnv(t)
+	dsn := os.Getenv("DATABASE_URL_TESTS")
+	if dsn == "" {
+		log.Fatal("DATABASE_URL_TESTS is required")
+	}
+
+	pool, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		log.Fatalf("db connect: %v", err)
+	}
+
+	// Run migrations once per suite execution
+	runMigrations(pool)
+
+	return pool
+}
+
+// WithTestPool is a wrapper that provides a PostgresStore backed by a real pool.
+// Use this for testing transaction lifecycle methods like WithTx.
+func WithTestPool(t *testing.T, fn func(s *store.PostgresStore)) {
+	t.Helper()
+	pool := GetTestPool(t)
+	defer pool.Close()
+
+	// Create a store with the full pool (not a transaction)
+	s := store.NewPostgresStore(pool)
+	fn(s)
+}
+
+func WithTestTx(t *testing.T, fn func(q *db.Queries, s *store.PostgresStore)) {
+	LoadEnv(t)
+	dsn := os.Getenv("DATABASE_URL_TESTS")
+	if dsn == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
+
+	pool, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		log.Fatalf("db connect: %v", err)
+	}
+	defer pool.Close()
+
+	// Run migrations once per suite execution
+	runMigrations(pool)
+
+	t.Helper()
+	tx, err := pool.Begin(t.Context())
+	if err != nil {
+		t.Fatalf("could not begin db transaction: %v", err)
+	}
+	defer tx.Rollback(context.Background())
+
+	store := store.NewPostgresStoreFromTx(tx)
+	fn(db.New(tx), store)
+}
+
+// NewGinContext creates a minimal Gin context backed by a ResponseRecorder.
+func NewGinContext(method, path string) (*gin.Context, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(method, path, nil)
+	return c, w
+}
+
+// decodeJSON is a small helper to unmarshal a response body in tests.
+func DecodeJSON[T any](t *testing.T, w *httptest.ResponseRecorder) T {
+	t.Helper()
+	var out T
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&out))
+	return out
+}

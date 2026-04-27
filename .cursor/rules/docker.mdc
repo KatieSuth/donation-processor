@@ -1,0 +1,9 @@
+---
+description: Rules for Docker and CI/CD configurations
+globs: ["Dockerfile", "docker-compose.yml", "docker-compose.*.yml", ".github/workflows/**"]
+---
+# Environment Standards
+- Multi-stage builds are required for production Dockerfiles.
+- In compose files, health checks are required for core dependencies and app services that gate startup (for example, DB/API). Health checks for edge/proxy services are optional unless orchestration depends on them.
+- In GitHub Actions workflows, use pinned and verified action versions per project policy (major-tag pinning at minimum; full SHA pinning when required by repo security standards).
+- **Networking:** Ensure compose service names match upstream targets defined in the active reverse-proxy or gateway configuration.

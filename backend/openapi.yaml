@@ -1,0 +1,217 @@
+openapi: 3.1.0
+info:
+  title: Donation Processor API
+  version: 1.0.0
+  description: API contract for the donation processor backend.
+
+tags:
+  - name: health
+    description: Service health
+  - name: donations
+    description: Donation ingestion
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      operationId: health
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /donations:
+    get:
+      tags: [donations]
+      summary: Retrieve all donations
+      operationId: listDonations
+      responses:
+        "200":
+          description: donations retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListDonationsResponse"
+    post:
+      tags: [donations]
+      summary: Ingest and process a donation
+      operationId: createDonation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDonationRequest"
+      responses:
+        "201":
+          description: donation successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Donation"
+        "400":
+          description: invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /donations/{uuid}:
+    get:
+      tags: [donations]
+      summary: Retrieve a donation by UUID
+      operationId: getDonation
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: donation found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Donation"
+        "404":
+          description: donation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /donations/{uuid}/status:
+    patch:
+      tags: [donations]
+      summary: Update donation status
+      operationId: updateDonationStatus
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDonationStatusRequest"
+      responses:
+        "200":
+          description: status successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Donation"
+        "404":
+          description: donation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, message, timestamp]
+      properties:
+        status:
+          type: string
+          examples: ["ok"]
+        message:
+          type: string
+          examples: ["API is running"]
+        timestamp:
+          type: string
+          format: date-time
+    CreateDonationRequest:
+      type: object
+      required:
+        - uuid
+        - amount
+        - currency
+        - paymentMethod
+        - nonprofitId
+        - donorId
+        - status
+        - createdAt
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        amount:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          enum: ["USD"]
+        paymentMethod:
+          type: string
+          enum: ["cc", "ach", "crypto", "venmo"]
+        nonprofitId:
+          type: string
+        donorId:
+          type: string
+        status:
+          type: string
+          enum: ["new", "pending", "success", "failure"]
+        createdAt:
+          type: string
+          format: date-time
+    Donation:
+      allOf:
+        - $ref: "#/components/schemas/CreateDonationRequest"
+        - type: object
+          required: [updatedAt]
+          properties:
+            updatedAt:
+              type: string
+              format: date-time
+    ErrorResponse:
+      type: object
+      required: [status, message]
+      properties:
+        status:
+          type: string
+          enum: ["error"]
+        message:
+          type: string
+    ListDonationsResponse:
+      type: object
+      required: [donations]
+      properties:
+        donations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Donation"
+    UpdateDonationStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: ["new", "pending", "success", "failure"]
