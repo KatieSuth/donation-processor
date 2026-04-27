@@ -62,8 +62,8 @@ jobs:
         uses: schneegans/dynamic-badges-action@v1.7.0
         with:
           auth: ${{ secrets.GIST_TOKEN }}
-          gistID: c21c84f4fba3f91f41a5be25dd59326a
-          filename: boilerplate-coverage.json
+          gistID: 3a4113f9325b9a4a8215ff2fcd018fbf
+          filename: donation-processor-coverage.json
           label: Backend Coverage
           message: ${{ env.COVERAGE_PCT }}%
           valColorRange: ${{ env.COVERAGE_PCT }}
